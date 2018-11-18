@@ -17,7 +17,7 @@ def extract_frames(file_name, output_buffer):
     # read first image
     success, image = vidcap.read()
 
-    print("Reading frame {} {} ".format(count, success))
+    print(f"Reading frame {count} {success} ")
     while success:
         # get a jpg encoded frame
         success, jpgImage = cv2.imencode('.jpg', image)
@@ -29,7 +29,7 @@ def extract_frames(file_name, output_buffer):
         output_buffer.put(jpgAsText)
 
         success, image = vidcap.read()
-        print('Reading frame {} {}'.format(count, success))
+        print(f'Reading frame {count} {success}')
         count += 1
 
     print("Frame extraction complete")
@@ -53,7 +53,7 @@ def display_frames(input_buffer):
         # get a jpg encoded frame
         img = cv2.imdecode(jpgImage, cv2.IMREAD_UNCHANGED)
 
-        print("Displaying frame {}".format(count))
+        print(f"Displaying frame {count}")
 
         # display the image in a window called "video" and wait 42ms
         # before displaying the next frame
