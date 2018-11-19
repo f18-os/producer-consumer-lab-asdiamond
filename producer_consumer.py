@@ -7,11 +7,9 @@ Credit goes to: https://gist.github.com/mahdavipanah/b8b7999e9542458a9b908112c1e
 import threading
 import time
 import random
+import cv2
+import os
 
-random.seed(0)  # I am using random delays in parts of this code to make my testing more robust
-
-stuff = [10, 20, 30, 40, 50, 60, 70, 80, 90]  # stuff to produce
-index = 0  # I update this as I produce an element from the array
 
 # Buffer size
 N = 10
@@ -29,43 +27,66 @@ fill2_count = threading.Semaphore(0)
 empty2_count = threading.Semaphore(M)
 
 
-def produce():
-    global index
-    # return whatever is produced
-    delay = random.uniform(1, 2)
-    if index < len(stuff):
-        k = stuff[index]
-        index += 1
-    else:  # we've produced everything, send signal to stop
-        k = None
-    time.sleep(delay)
-    print(f'Produced {k} in {delay:.2f} seconds')
-    return k
+count = 0  # really it is more like the filename, but whatever
+def produce(vidcap):
+    global count
+    success, image = vidcap.read()
+    if not success:
+        return None
+    else:
+        print(f'writing frame {count}')
+        cv2.imwrite(f'{output_dir}/frame_{count:04d}.jpg', image)
+        count += 1
+        return count
 
 
+output_dir = 'frames'
+clip_filename = 'clip.mp4'
 def producer():
+    vidcap = cv2.VideoCapture(clip_filename)
+
+    # create the output directory if it doesn't exist
+    if not os.path.exists(output_dir):
+        print(f"Output directory {output_dir} didn't exist, creating")
+        os.makedirs(output_dir)
+
     front = 0
     while True:
-        x = produce()
+        # put the number that represents the frame number and filename into the queue
+        # the file will be in f'{output_dir}/frame_{count:04d}.jpg
+        x = produce(vidcap)
         empty_count.acquire()
         buf[front] = x
         fill_count.release()
         front = (front + 1) % N
         if x is None:
+            # signal to S T O P
             return
 
 
 def consume(y):
-    # do whatever you need to to consume 'y'
-    delay = random.uniform(1, 2)
-    time.sleep(delay)
-    print(f"Consumed {y} in {delay:.2f} seconds")
+    # y is the frame number
+    # write it into a new file that is the grayscale
+    # conversion of the frame
+    print(f'converting frame {y}')
+    in_filename = f'{output_dir}/frame_{y:04d}.jpg'
+    in_frame = cv2.imread(in_filename, cv2.IMREAD_COLOR)
+
+    grayscale_frame = cv2.cvtColor(in_frame, cv2.COLOR_BGR2GRAY)
+    out_filename = f'{output_dir}/grayscale_{y:04d}.jpg'
+
+    cv2.imwrite(out_filename, grayscale_frame)
 
 
 def consumer():
+    # Really more like a producer and a consumer
+    # converts frames into grayscale, then puts
+    # them onto the second queue because they are
+    # ready to be displayed
     rear = 0
     front2 = 0
     while True:
+        # y is that count variable, the frame number
         fill_count.acquire()
         y = buf[rear]
         empty_count.release()
@@ -73,30 +94,43 @@ def consumer():
         rear = (rear + 1) % N
 
         # put val onto second blocking queue
-        z = y * -1 if y is not None else None  # so pythonic
         empty2_count.acquire()
-        buf2[front2] = z
+        buf2[front2] = y
         fill2_count.release()
         front2 = (front2 + 1) % M
         if y is None:
+            # signal for stop
             return
 
 
+frame_delay = 42  # a somewhat important number
 def consume2(z):
-    delay = random.uniform(1, 2)
-    time.sleep(delay)
-    print(f'Consume2ed {z} in {delay:.2f} seconds')
+    start_time = time.time()
+
+    frame_filename = f'{output_dir}/grayscale_{z:04d}.jpg'
+    frame = cv2.imread(frame_filename)
+
+    cv2.imshow("Video", frame)
+
+    elapsed_time = int((time.time() - start_time) * 1000)
+
+    wait_time = max(1, frame_delay - elapsed_time)
+
+    if cv2.waitKey(wait_time) and 0xFF == ord("q"):
+        return
+
 
 
 def consumer2():
     rear = 0
     while True:
         fill2_count.acquire()
-        y = buf2[rear]
+        z = buf2[rear]
         empty2_count.release()
-        consume2(y)
+        consume2(z)
         rear = (rear + 1) % M
-        if y is None:
+        if z is None:
+            cv2.destroyAllWindows()
             return
 
 
