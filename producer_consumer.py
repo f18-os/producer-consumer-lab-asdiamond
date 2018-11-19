@@ -1,5 +1,5 @@
 """
-Solving producer-consumer problem using semaphores
+Solving extractor-middle problem using semaphores
 Credit goes to: https://gist.github.com/mahdavipanah/b8b7999e9542458a9b908112c1e63cff
 @author maydavipanah
 """
@@ -9,7 +9,6 @@ import time
 import random
 import cv2
 import os
-
 
 # Buffer size
 N = 10
@@ -26,23 +25,32 @@ buf2 = [0] * M
 fill2_count = threading.Semaphore(0)
 empty2_count = threading.Semaphore(M)
 
+frame = 0  # really it is more like the filename, but whatever
 
-count = 0  # really it is more like the filename, but whatever
-def produce(vidcap):
-    global count
+
+def produce_frames(vidcap):
+    # writes the current frame to a file
+    global frame
     success, image = vidcap.read()
     if not success:
         return None
     else:
-        print(f'writing frame {count}')
-        cv2.imwrite(f'{output_dir}/frame_{count:04d}.jpg', image)
-        count += 1
-        return count
+        print(f'writing frame {frame}')
+        cv2.imwrite(f'{output_dir}/frame_{frame:04d}.jpg', image)
+        frame += 1
+        return frame
 
 
 output_dir = 'frames'
 clip_filename = 'clip.mp4'
-def producer():
+
+
+def extractor():
+    # open the clip_filename as a video and
+    # write its individual frames to a file
+    # the filename is defined by the frame number, so
+    # that is what is put on the queue for thread
+    # communication/coordination
     vidcap = cv2.VideoCapture(clip_filename)
 
     # create the output directory if it doesn't exist
@@ -54,7 +62,7 @@ def producer():
     while True:
         # put the number that represents the frame number and filename into the queue
         # the file will be in f'{output_dir}/frame_{count:04d}.jpg
-        x = produce(vidcap)
+        x = produce_frames(vidcap)
         empty_count.acquire()
         buf[front] = x
         fill_count.release()
@@ -64,22 +72,21 @@ def producer():
             return
 
 
-def consume(y):
-    # y is the frame number
+def to_gray(frame):
     # write it into a new file that is the grayscale
     # conversion of the frame
-    print(f'converting frame {y}')
-    in_filename = f'{output_dir}/frame_{y:04d}.jpg'
+    print(f'converting frame {frame}')
+    in_filename = f'{output_dir}/frame_{frame:04d}.jpg'
     in_frame = cv2.imread(in_filename, cv2.IMREAD_COLOR)
 
     grayscale_frame = cv2.cvtColor(in_frame, cv2.COLOR_BGR2GRAY)
-    out_filename = f'{output_dir}/grayscale_{y:04d}.jpg'
+    out_filename = f'{output_dir}/grayscale_{frame:04d}.jpg'
 
     cv2.imwrite(out_filename, grayscale_frame)
 
 
-def consumer():
-    # Really more like a producer and a consumer
+def middle():
+    # Really more like a extractor and a consumer
     # converts frames into grayscale, then puts
     # them onto the second queue because they are
     # ready to be displayed
@@ -90,7 +97,7 @@ def consumer():
         fill_count.acquire()
         y = buf[rear]
         empty_count.release()
-        consume(y)
+        to_gray(y)
         rear = (rear + 1) % N
 
         # put val onto second blocking queue
@@ -104,10 +111,12 @@ def consumer():
 
 
 frame_delay = 42  # a somewhat important number
-def consume2(z):
+
+
+def show(frame):
     start_time = time.time()
 
-    frame_filename = f'{output_dir}/grayscale_{z:04d}.jpg'
+    frame_filename = f'{output_dir}/grayscale_{frame:04d}.jpg'
     frame = cv2.imread(frame_filename)
 
     cv2.imshow("Video", frame)
@@ -120,24 +129,24 @@ def consume2(z):
         return
 
 
-
-def consumer2():
+def display():
+    # show frames that are ready from the second queue
     rear = 0
     while True:
         fill2_count.acquire()
         z = buf2[rear]
         empty2_count.release()
-        consume2(z)
+        show(z)
         rear = (rear + 1) % M
         if z is None:
             cv2.destroyAllWindows()
             return
 
 
-producer_thread = threading.Thread(target=producer)
-consumer_thread = threading.Thread(target=consumer)
-consumer2_thread = threading.Thread(target=consumer2)
+extractor_thread = threading.Thread(target=extractor)
+middle_thread = threading.Thread(target=middle)
+display_thread = threading.Thread(target=display)
 
-producer_thread.start()
-consumer_thread.start()
-consumer2_thread.start()
+extractor_thread.start()
+middle_thread.start()
+display_thread.start()
