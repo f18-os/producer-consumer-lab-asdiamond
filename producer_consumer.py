@@ -27,6 +27,7 @@ buf2 = [0] * M
 fill2_count = threading.Semaphore(0)
 empty2_count = threading.Semaphore(M)
 
+
 # frame = 0  # really it is more like the filename, but whatever
 
 
@@ -66,40 +67,40 @@ def extractor():
     front = 0
     while True:
         # put the jpg, base64 encoded frame into the queue
-        x = produce_frames(vidcap)
+        encoded_frame = produce_frames(vidcap)
         empty_count.acquire()
-        buf[front] = x
+        buf[front] = encoded_frame
         fill_count.release()
         front = (front + 1) % N
-        if x is None:
+        if encoded_frame is None:
             # signal to S T O P
             return
 
 
-def to_gray(frame):
+def to_gray(encoded_frame):
     # decode it, convert it to
     # grayscale, then encode it
     # again and put it back
-    if frame is None:
+    # this is where I was having some issues
+    # because it need to be jpg encoded twice
+
+    if encoded_frame is None:
+        # for stop signal
         return None
 
-    jpg_raw = base64.b64decode(frame)
+    jpg_raw = base64.b64decode(encoded_frame)
     jpg_img = np.asarray(bytearray(jpg_raw), dtype=np.uint8)
-
 
     img = cv2.imdecode(jpg_img, cv2.IMREAD_UNCHANGED)
 
-
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # cv2.imshow('win', img_gray)
-    # cv2.waitKey()
-
+    # contrary to my initial understanding, cv2.IMREAD_UNCHANGED
+    # does change the image. It does not keep its .jpg encoding
+    # and needs to be encoded again.
     success, img_gray_jpg = cv2.imencode('.jpg', img_gray)
 
     img_gray_b64 = base64.b64encode(img_gray_jpg)
-
-    # print(img_gray_b64)
 
     return img_gray_b64
 
@@ -113,19 +114,18 @@ def middle():
     rear = 0
     front2 = 0
     while True:
-        # y is the base64 jpg frame
         fill_count.acquire()
-        y = buf[rear]
+        frame = buf[rear]
         empty_count.release()
-        z = to_gray(y)
+        gray_frame = to_gray(frame)
         rear = (rear + 1) % N
 
         # put val onto second blocking queue
         empty2_count.acquire()
-        buf2[front2] = z
+        buf2[front2] = gray_frame
         fill2_count.release()
         front2 = (front2 + 1) % M
-        if y is None:
+        if frame is None:
             # signal for stop
             return
 
@@ -133,13 +133,13 @@ def middle():
 frame_delay = 42  # a somewhat important number
 
 
-def show(frame):
-    if frame is None:
+def show(encoded_frame):
+    if encoded_frame is None:
         return
-    print(f'frame = {frame}')
+    print(f'frame = {encoded_frame}')
     start_time = time.time()
 
-    frame_d = base64.b64decode(frame)
+    frame_d = base64.b64decode(encoded_frame)
     frame_im = np.asarray(bytearray(frame_d), dtype=np.uint8)
 
     img = cv2.imdecode(frame_im, cv2.IMREAD_UNCHANGED)
@@ -159,11 +159,11 @@ def display():
     rear = 0
     while True:
         fill2_count.acquire()
-        z = buf2[rear]
+        encoded_frame = buf2[rear]
         empty2_count.release()
-        show(z)
+        show(encoded_frame)
         rear = (rear + 1) % M
-        if z is None:
+        if encoded_frame is None:
             cv2.destroyAllWindows()
             return
 
