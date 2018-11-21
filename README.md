@@ -1,48 +1,32 @@
-# Producer Consumer Lab
+# My Producer Consumer Lab
+## producer_consumer.py
 
-For this lab you will implement a trivial producer-consumer system using
-python threads where all coordination is managed by counting and binary
-semaphores for a system of two producers and two consumers. The producers and
-consumers will form a simple rendering pipeline using multiple threads. One
-thread will read frames from a file, a second thread will take those frames
-and convert them to grayscale, and the third thread will display those
-frames. The threads will run concurrently.
+* I used counting semaphores in pythons 'threading' library to implement a multithreaded 
+video player. 
 
-## File List
-### ExtractFrames.py
-Extracts a series of frames from the video contained in 'clip.mp4' and saves 
-them as jpeg images in sequentially numbered files with the pattern
-'frame_xxxx.jpg'.
+* One thread reads frames from the .mp4 and encodes them as .jpg's in base64
+and throws them onto a blocking queue. 
 
-### ConvertToGrayscale.py
-Loads a series for frams from sequentially numbered files with the pattern
-'frame_xxxx.jpg', converts the grames to grayscale, and saves them as jpeg
-images with the file names 'grayscale_xxxx.jpg'
+* Another thread takes from this queue, decodes the images, converts them to grayscale,
+then puts them onto another queue. 
 
-### DisplayFrames.py
-Loads a series of frames sequently from files with the names
-'grayscale_xxxx.jpg' and displays them with a 42ms delay.
+* A third thread reads from this second queue and displays the grayscale images.
 
-### ExtractAndDisplay.py
-Loads a series of framss from a video contained in 'clip.mp4' and displays 
-them with a 42ms delay
+* When there aren't any more frames left, the first thread will throw a 'None' onto the queue,
+which will cause all of the other threads to very cleanly stop at the end of the video.
 
-## Requirements
-* Extract frames from a video file, convert them to grayscale, and display
-them in sequence
-* You must have three functions
-  * One function to extract the frames
-  * One function to convert the frames to grayscale
-  * One function to display the frames at the original framerate (24fps)
-* The functions must each execute within their own python thread
-  * The threads will execute concurrently
-  * The order threads execute in may not be the same from run to run
-* Threads will need to signal that they have completed their task
-* Threads must process all frames of the video exactly once
-* Frames will be communicated between threads using producer/consumer idioms
-  * Producer/consumer quesues will be bounded at ten frames
+The video plays pretty smoothly, and with no artifacts. 
 
-Note: You may have ancillary objects and method in order to make you're code easer to understand and implement.
+I also did not use any classes or anything, the code is fairly simple.
+I made a 'Contributors.md' file listing my references. I took some inspiration from
+very simple code, but in general, any other code here is mine. 
+
+## PS
+In producer_consumer_practice.py I made my idioms with a simple array to test if they
+worked before I integrated them with the video code. It may be easier to test my idioms
+There if you want to take a look. It takes numbers from an array, negates them, then prints 
+them, all in separate threads using the same producer-consumer idioms as the video 
+player. 
 
 
 
