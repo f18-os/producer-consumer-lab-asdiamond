@@ -16,13 +16,15 @@ startTime = time.time()
 frameFileName = f"{outputDir}/grayscale_{count:04d}.jpg"
 
 # load the frame
-frame = cv2.imread(frameFileName)
+raw_frame = cv2.imread(frameFileName)
 
-while frame is not None:
+while raw_frame is not None:
+
+
 
     print(f"Displaying frame {count}")
     # Display the frame in a window called "Video"
-    cv2.imshow("Video", frame)
+    cv2.imshow("Video", raw_frame)
 
     # compute the amount of time that has elapsed
     # while the frame was processed
@@ -45,7 +47,7 @@ while frame is not None:
     frameFileName = f"{outputDir}/grayscale_{count:04d}.jpg"
 
     # Read the next frame file
-    frame = cv2.imread(frameFileName)
+    raw_frame = cv2.imread(frameFileName)
 
 # make sure we cleanup the windows, otherwise we might end up with a big, bad, mess
 cv2.destroyAllWindows()

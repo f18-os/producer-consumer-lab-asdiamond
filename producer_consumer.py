@@ -1,5 +1,5 @@
 """
-Solving extractor-middle problem using semaphores
+Solving producer-consumer problem using semaphores
 Credit goes to: https://gist.github.com/mahdavipanah/b8b7999e9542458a9b908112c1e63cff
 @author maydavipanah
 """
@@ -9,6 +9,8 @@ import time
 import random
 import cv2
 import os
+import base64
+import numpy as np
 
 # Buffer size
 N = 10
@@ -25,20 +27,29 @@ buf2 = [0] * M
 fill2_count = threading.Semaphore(0)
 empty2_count = threading.Semaphore(M)
 
-frame = 0  # really it is more like the filename, but whatever
+# frame = 0  # really it is more like the filename, but whatever
 
 
 def produce_frames(vidcap):
-    # writes the current frame to a file
-    global frame
+    # read a frame, encode it as a .jpg
+    # encode it in base64, then return it
+    # to be put on the queue
     success, image = vidcap.read()
     if not success:
         return None
     else:
-        print(f'writing frame {frame}')
-        cv2.imwrite(f'{output_dir}/frame_{frame:04d}.jpg', image)
-        frame += 1
-        return frame
+        succ, jpg_image = cv2.imencode('.jpg', image)
+        if not succ:
+            # I am not really sure what to do in this situation,
+            # so I will just give a halt
+            return None
+
+        # The comment says this is done in the example code to
+        # make debugging easier, but I have no idea how
+        # that can be true
+        jpg_text = base64.b64encode(jpg_image)
+        print('writing a frame into buf')
+        return jpg_text
 
 
 output_dir = 'frames'
@@ -47,21 +58,14 @@ clip_filename = 'clip.mp4'
 
 def extractor():
     # open the clip_filename as a video and
-    # write its individual frames to a file
-    # the filename is defined by the frame number, so
-    # that is what is put on the queue for thread
-    # communication/coordination
+    # read each frame. Encode it as a jpg image
+    # for some weird reason, then encode that jpg
+    # in base64, and put it on the queue
     vidcap = cv2.VideoCapture(clip_filename)
-
-    # create the output directory if it doesn't exist
-    if not os.path.exists(output_dir):
-        print(f"Output directory {output_dir} didn't exist, creating")
-        os.makedirs(output_dir)
 
     front = 0
     while True:
-        # put the number that represents the frame number and filename into the queue
-        # the file will be in f'{output_dir}/frame_{count:04d}.jpg
+        # put the jpg, base64 encoded frame into the queue
         x = produce_frames(vidcap)
         empty_count.acquire()
         buf[front] = x
@@ -73,36 +77,52 @@ def extractor():
 
 
 def to_gray(frame):
-    # write it into a new file that is the grayscale
-    # conversion of the frame
-    print(f'converting frame {frame}')
-    in_filename = f'{output_dir}/frame_{frame:04d}.jpg'
-    in_frame = cv2.imread(in_filename, cv2.IMREAD_COLOR)
+    # decode it, convert it to
+    # grayscale, then encode it
+    # again and put it back
+    if frame is None:
+        return None
 
-    grayscale_frame = cv2.cvtColor(in_frame, cv2.COLOR_BGR2GRAY)
-    out_filename = f'{output_dir}/grayscale_{frame:04d}.jpg'
+    jpg_raw = base64.b64decode(frame)
+    jpg_img = np.asarray(bytearray(jpg_raw), dtype=np.uint8)
 
-    cv2.imwrite(out_filename, grayscale_frame)
+
+    img = cv2.imdecode(jpg_img, cv2.IMREAD_UNCHANGED)
+
+
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # cv2.imshow('win', img_gray)
+    # cv2.waitKey()
+
+    success, img_gray_jpg = cv2.imencode('.jpg', img_gray)
+
+    img_gray_b64 = base64.b64encode(img_gray_jpg)
+
+    # print(img_gray_b64)
+
+    return img_gray_b64
 
 
 def middle():
-    # Really more like a extractor and a consumer
+    # Really more like a producer and a consumer
+    # all in one thread
     # converts frames into grayscale, then puts
     # them onto the second queue because they are
     # ready to be displayed
     rear = 0
     front2 = 0
     while True:
-        # y is that count variable, the frame number
+        # y is the base64 jpg frame
         fill_count.acquire()
         y = buf[rear]
         empty_count.release()
-        to_gray(y)
+        z = to_gray(y)
         rear = (rear + 1) % N
 
         # put val onto second blocking queue
         empty2_count.acquire()
-        buf2[front2] = y
+        buf2[front2] = z
         fill2_count.release()
         front2 = (front2 + 1) % M
         if y is None:
@@ -114,12 +134,17 @@ frame_delay = 42  # a somewhat important number
 
 
 def show(frame):
+    if frame is None:
+        return
+    print(f'frame = {frame}')
     start_time = time.time()
 
-    frame_filename = f'{output_dir}/grayscale_{frame:04d}.jpg'
-    frame = cv2.imread(frame_filename)
+    frame_d = base64.b64decode(frame)
+    frame_im = np.asarray(bytearray(frame_d), dtype=np.uint8)
 
-    cv2.imshow("Video", frame)
+    img = cv2.imdecode(frame_im, cv2.IMREAD_UNCHANGED)
+
+    cv2.imshow("Video", img)
 
     elapsed_time = int((time.time() - start_time) * 1000)
 

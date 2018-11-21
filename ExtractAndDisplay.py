@@ -44,6 +44,7 @@ def display_frames(input_buffer):
         # get the next frame
         frameAsText = input_buffer.get()
 
+        print(f'frame_as_text = {frameAsText}')
         # decode the frame 
         jpgRawImage = base64.b64decode(frameAsText)
 
